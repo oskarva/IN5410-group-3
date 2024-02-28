@@ -1,38 +1,34 @@
 from pulp import *
+import numpy as np
+
+# Generate a random RTP curve for 24 hours
+np.random.seed(0)  # For reproducibility
+rtp_prices = np.random.uniform(low=0.5, high=2.0, size=24)  # Simulated RTP prices from 0.5 to 2.0
 
 # Define the problem
-prob = LpProblem("Minimize_Energy_Cost_with_RTP", LpMinimize)
+prob = LpProblem("Minimize_Energy_Cost", LpMinimize)
 
-APPLIANCES = ['lighting', 'heating', 'refrigerator-freezer', 'electric_stove', 'TV', 'computer', 'dishwasher', 'laundry_machine', 'cloth_dryer', 'EV']
-HOURS = [i for i in range(0, 24)]
-CONSUMPTION_AVERAGE = {
-    'lighting':1.5,
-    'heating':8,
-    'refrigerator-freezer':2.64,
-    'electric_stove':3.9,
-    'TV':0.6,
-    'computer':0.6,
-    'dishwasher':1.44,
-    'laundry_machine':1.94,
-    'cloth_dryer':2.5,
-    'EV':9.9,
-}
+# Appliances setup
+appliances = ['Dishwasher', 'LaundryMachine', 'ClothDryer', 'EV']
+consumption = {'Dishwasher': 1.44, 'LaundryMachine': 1.94, 'ClothDryer': 2.5, 'EV': 9.9}  # kWh per operation
 
-# Define your RTP pricing curve here
-price_t = [i for i in range(1, 25)]  # This should be a list of 24 prices, one for each hour
+# Decision variables: binary variables indicating whether an appliance runs in a given hour
+hours = list(range(24))
+x = LpVariable.dicts("schedule", (appliances, hours), 0, 1, LpBinary)
 
-# Define decision variables
-x_it = LpVariable.dicts("ApplianceRun", (APPLIANCES, HOURS), 0, 1, LpBinary)
+# Objective Function: Minimize total energy cost
+prob += lpSum([rtp_prices[h] * x[a][h] * consumption[a] for a in appliances for h in hours])
 
-
-# Objective function
-prob += lpSum([x_it[i][t] * CONSUMPTION_AVERAGE[i] * price_t[t] for i in APPLIANCES for t in HOURS]), "TotalCost"
-
-# Add constraints for non-shiftable and shiftable appliances
+# Constraints: Each shiftable appliance runs once a day
+for a in appliances:
+    prob += lpSum([x[a][h] for h in hours]) == 1
 
 # Solve the problem
 prob.solve()
 
-# Output results
-print(x_it)
-print(value(prob.objective))
+# Output the results
+schedule = {a: [x[a][h].varValue for h in hours] for a in appliances}
+total_cost = value(prob.objective)
+
+print("Optimal Schedule:", schedule)
+print("Total Cost:", total_cost)
